@@ -1,14 +1,14 @@
 #########################################################################
-# Rotina de tratamento de excecao e interrupcao		v2.1		#
+# Rotina de tratamento de excecao e interrupcao		v2.4		#
 # Lembre-se: Os ecalls originais do Rars possuem precedencia sobre	#
 # 	     estes definidos aqui					#
 # Os ecalls 1XX usam o BitMap Display e Keyboard Display MMIO Tools	#
-# Usar o RARS14_Custom4	(misa)						#
+# Usar o RARS16_Custom1	(misa)						#
 # Marcus Vinicius Lamar							#
-# 2020/1								#
+# 2023/2								#
 #########################################################################
 
-# incluir o MACROSv20.s no início do seu programa!!!!
+# incluir o MACROSv24.s no início do seu programa!!!!
 
 .data
 .align 2
@@ -95,14 +95,13 @@ PC:     		.string "PC: "
 Addrs:  		.string "Addrs: "
 Instr:  		.string "Instr: "
 
-
+############################################################################################################
 ### Obs.: a forma 'LABEL: instrucao' embora fique feio facilita o debug no Rars, por favor nao reformatar!!!
-
-########################################################################################
+############################################################################################################
 .text
 
 
-###### Devem ser colocadas aqui as identificações das interrupções e exceções ###
+###### Devem ser colocadas aqui as identificações das interrupções e exceções #######
 
 	csrwi ucause,1		# caso ocorra dropdown vai gerar exceção de instrução inválida
 
@@ -389,6 +388,11 @@ ecallException:   addi    sp, sp, -264              # Salva todos os registrador
     addi    t0, zero, 141             # ecall 41 = random
     beq     t0, a7, goToRandom
 
+    addi    t0, zero, 42              # ecall 41 = random
+    beq     t0, a7, goToRandom2
+    addi    t0, zero, 142             # ecall 41 = random
+    beq     t0, a7, goToRandom2
+
     addi    t0, zero, 34       		# ecall 34 = print hex
     beq     t0, a7, goToPrintHex
     addi    t0, zero, 134		# ecall 34 = print hex
@@ -420,6 +424,7 @@ ecallException:   addi    sp, sp, -264              # Salva todos os registrador
     addi    t0, zero, 136             # ecall 36 = PrintIntUnsigned
     beq     t0, a7, goToPrintIntUnsigned
 
+    jal NaoExisteEcall  # ecall inexistente
 
 	## end execution ##
 	goToExit:   	DE1(s8,goToExitDE2)		# se for a DE1 pula
@@ -472,6 +477,9 @@ ecallException:   addi    sp, sp, -264              # Salva todos os registrador
 			j       endEcall
 
 	goToRandom:	jal     Random                 	# chama random
+			j       endEcall
+
+	goToRandom2:	jal     Random2                 # chama random2
 			j       endEcall
 
 	goToCLS:	jal     clsCLS                 	# chama CLS
@@ -1475,12 +1483,6 @@ Time:  	DE1(s8,Time.DE1)
 Time.DE1:	csrr a0, time			#  Le time LOW
 		csrr a1, timeh 			#  Le time HIGH
 		ret
-#Time.DE2: 	#li 	t0, TimerLOW		# endereco do Timer
-#		li 	t0, STOPWATCH		# carrega endereco do StopWatch
-#	 	lw 	a0, 0(t0)		# carrega o valor do contador de ms
-#	 	#lw	a1, 4(t0)		# parte mais significativa
-#	 	li 	a1, 0x0000		# contador eh de 32 bits
-#fimTime: 	ret				# retorna
 
 
 ############################################
@@ -1498,19 +1500,9 @@ Sleep.Loop:	csrr	t0, time		# Le o tempo do sistema
 		bltu	t0, t1, Sleep.Loop	# t0<t1 ?
 		ret
 
-#sleepDE2:	#li	t0,TimerLOW		# Endereco do TimerLOW
-#		li 	t0, STOPWATCH		# endereco StopWatch
-#		lw 	t1, 0(t0)		# carrega o contador de ms
-#		add 	t2, a0, t1		# soma com o tempo solicitado pelo usuario
-#		
-#LoopSleep: 	lw 	t1, 0(t0)		# carrega o contador de ms
-#		blt 	t1, t2, LoopSleep	# nao chegou ao fim volta ao loop
-#	
-#fimSleep: 	ret				# retorna
-
 
 ############################################
-#  Random                            	   #
+#  Random         41                    	   #
 #  a0    =    numero randomico        	   #
 ############################################
 
@@ -1522,6 +1514,25 @@ Random:	 DE1(s8,Random.DE1)
 Random.DE1: 	li 	t0, LFSR	# carrega endereco do LFSR
 		lw 	a0, 0(t0)	# le a word em a0
 		ret			# retorna
+
+
+############################################
+#  Random 42                           	   #
+#  			                   #
+#  a1    =    Valor máximo                 #
+#  output a0 = numero randomico        	   #
+############################################
+
+Random2:	DE1(s8,Random.DE1)
+		li 	a7,42			# Chama o ecall do Rars
+		ecall	
+		ret				# saida
+	
+Random2.DE1: 	li 	t0, LFSR	# carrega endereco do LFSR
+		lw 	a0, 0(t0)	# le a word em a0
+		remu 	a0,a0,a1	# numero entre 0 e a1
+		ret			# retorna
+
 
 
 #################################
@@ -1700,11 +1711,10 @@ printIntUnsigned.fim:	ret
 
 
 
-
-
 ###########################################################################
 # lib de operações multiplicação, divisão e resto para a ISA RV32I
 # Nomenclatura usada pelo gcc
+###########################################################################
 
 # Multiplicação signed em a0 e a1  retorno em a0
 # https://github.com/gcc-mirror/gcc/tree/master/libgcc/config/epiphany
