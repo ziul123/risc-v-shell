@@ -424,6 +424,12 @@ ecallException:   addi    sp, sp, -264              # Salva todos os registrador
     addi    t0, zero, 136             # ecall 36 = PrintIntUnsigned
     beq     t0, a7, goToPrintIntUnsigned
 
+
+		addi		t0, zero, 81							# ecall 81 Read String Interativo
+		beq			t0, a7, goToIReadString
+		addi		t0, zero, 181							# ecall 81 Read String Interativo
+		beq			t0, a7, goToIReadString
+
     jal NaoExisteEcall  # ecall inexistente
 
 	## end execution ##
@@ -487,6 +493,9 @@ ecallException:   addi    sp, sp, -264              # Salva todos os registrador
 
 	goToBRES:	jal     BRESENHAM               # chama BRESENHAM
 			j       endEcall    	
+
+	goToIReadString: jal iReadString					# chama iReadString
+			j				endEcall
   		    				    		    				    		    		
 		
 
@@ -870,6 +879,7 @@ naoehshiftChar:	   	add     t3, s0, t3              # endereco na tabela de scan
 fimreadChar: 	ret			# retorna
 	
 #########################################
+# TODO retornar numero de char lidos em a0
 #    ReadString         	 	#
 # a0 = end Inicio      	 		#
 # a1 = tam Max String 		 	#
