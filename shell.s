@@ -2,21 +2,26 @@
 .eqv TERM_COLOR	0x000000FF
 
 .data
-buffer:			.space 40 
-prompt_pos:	.byte 0, 0
-token:			.space 40
-echo_cmd:		.string "echo "
-ls_cmd:			.string "ls "
+buffer:			.space 40 	# buffer para comando do usuario
+curr_line:	.byte 0			# linha atual na tela
+no_cmd_error:	.string "Erro: comando nao existe"
+
+### Comandos ###
+echo_str:		.string "echo"
+ls_str:			.string "ls"
+clear_str:	.string "clear"
+exit_str:		.string "exit"
 
 
 .include "MACROSv24.s"
 
 .text
 
-shell.read:
-li a0, PROMPT
+shell.read: li a0, PROMPT
 li a1, 0
-li a2, 0
+la t0, curr_line
+lbu a2, 0(t0)
+slli a2, a2, 4
 li a3, TERM_COLOR
 li a4, 0
 li a7, 111
@@ -26,35 +31,83 @@ ecall
 la a0, buffer
 li a1, 39
 li a2, 8
-li a3, 0
+la t0, curr_line
+lbu a3, 0(t0)
+slli a3, a3, 4
 li a4, TERM_COLOR
 li a7, 81
 ecall
 
-la a0, buffer
-la a1, echo_cmd
-jal startsWith
-bnez a0, is_echo
 
 la a0, buffer
-la a1, ls_cmd
+la a1, echo_str
 jal startsWith
-bnez a0, is_ls
+bnez a0, shell.echo_cmd
+
+#la a0, buffer
+#la a1, ls_str
+#jal startsWith
+#bnez a0, shell.ls_cmd
+
+la a0, buffer
+la a1, clear_str
+jal startsWith
+bnez a0, shell.clear_cmd
+
+la a0, buffer
+la a1, exit_str
+jal startsWith
+bnez a0, shell.exit_cmd
+
+# comando nao implementado
+la a0, no_cmd_error
+jal shell.printLine
+j shell.reset_buffer
+
+shell.clear_cmd: la t0, curr_line
+		sb zero, 0(t0)
+		li a0, 0
+		li a1, 0
+		li a7, 148
+		ecall
+		j shell.reset_buffer
+
+shell.echo_cmd: la t0, buffer
+		addi a0, t0, 5		# como eh echo, pula "echo "
+		jal shell.printLine
+		j shell.reset_buffer
 
 
+shell.ls_cmd:
+# TODO
 
-is_echo:
-la a0, echo_cmd
-j end_cmd
-
-is_ls:
-la a0, ls_cmd
-
-end_cmd:
-li a7, 4
+shell.exit_cmd: li a7, 10
 ecall
-li a7, 10
-ecall
+
+shell.reset_buffer:
+		la t0, buffer
+		li t1, 10
+reset_buffer.loop: sw zero, 0(t0)
+		addi t0, t0, 4
+		addi t1, t1, -1
+		bnez t1, reset_buffer.loop
+		j shell.read
+
+# printLine
+# a0 = string
+shell.printLine:
+		li a1, 0
+		la t1, curr_line
+		lbu t2, 0(t1)
+		addi a2, t2, 1	# incrementa linha
+		addi t2, t2, 2	# proxima linha 
+		sb t2, 0(t1)
+		slli a2, a2, 4	# offset da linha
+		li a3, TERM_COLOR
+		li a4, 0
+		li a7, 104
+		ecall
+		ret
 
 # startsWith
 # a0 = string
@@ -62,18 +115,22 @@ ecall
 ##############
 # retorna
 # a0 = a0 comeca com a1
-startsWith: lbu t1, 0(a1)
-		beqz t1, startsWith.true
-		lbu t0, 0(a0)
-		bne t0, t1, startsWith.false
-		addi a0, a0, 1
-		addi a1, a1, 1
+startsWith: lbu t1, 0(a1)	# char do prefixo
+		lbu t0, 0(a0)					# char da string
+		beqz t1, startsWith.preEnd	# se prefixo acabou
+		bne t0, t1, startsWith.false	# se char eh diferente do prefixo
+		addi a0, a0, 1	# incrementa ponteiro da string
+		addi a1, a1, 1	# incrementa ponteiro do prefixo
 		j startsWith
 
-startsWith.true: li a0, 1
-		j fimstartsWith
+startsWith.preEnd: li t1, 0x20	
+		beq t0, t1, startsWith.true	# checa se proximo char eh espaco
+		beqz t0, startsWith.true		# checa se proximo char eh nulo
 
 startsWith.false: li a0, 0
+		j fimstartsWith
+
+startsWith.true: li a0, 1
 
 fimstartsWith: ret
 
@@ -151,13 +208,9 @@ iReadString.backspace: beqz a5, loopTreatChar # se nao tem char, pula
 		j loopTreatChar	# loop para ler o proximo char
 
 iReadString.linefeed:
-# mudar
-li a7, 31
-li a0, 100
-li a1, 300
-li a2, 0
-li a3, 200
-ecall
+# apaga o cursor
+		mv a0, zero			# cor = 0 (tudo preto)
+		jal printCursor	# imprime cursor com tudo preto (apaga cursor antigo)
 j fimiReadString
 
 
@@ -193,24 +246,6 @@ printCursor:
 		addi sp, sp, 4
 		fimprintCursor:
 		ret
-
-# escreve o prompt na tela
-# a0 = cor
-print_prompt:
-addi sp, sp, -4
-sw ra, 0(sp)
-mv a3, a0
-li a0, PROMPT
-la t0, prompt_pos
-lbu a1, 0(t0)
-lbu a2, 1(t0)
-li a4, 0
-jal printChar
-lw ra, 0(sp)
-addi sp, sp, 4
-ret
-
-
 
 
 .include "SYSTEMv24.s"
