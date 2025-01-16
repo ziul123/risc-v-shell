@@ -93,13 +93,39 @@ reset_buffer.loop: sw zero, 0(t0)
 		bnez t1, reset_buffer.loop
 		j shell.read
 
+shell.scroll:
+		li t4, VGAADDRESSINI0
+		li t5, 320
+		slli t5, t5, 5	# 32 linhas de pixels -> duas linhas no terminal
+		add t5, t5, t4	# t5 = frame 0 + offset 
+		li t6, VGAADDRESSFIM0
+scroll.loop: bge t5, t6, scroll.cleanup
+		lw t3, 0(t5)
+		sw t3, 0(t4)
+		addi t4, t4, 4
+		addi t5, t5, 4
+		j scroll.loop
+scroll.cleanup: bge t4, t6, scroll.end
+		sw zero, 0(t4)
+		addi t4, t4, 4
+		j scroll.cleanup
+scroll.end: la t4, curr_line
+		li t2, 12
+		sb t2, 0(t4)
+		ret
+
 # printLine
 # a0 = string
 shell.printLine:
+		addi sp, sp, -4
+		sw ra, 0(sp)
 		li a1, 0
 		la t1, curr_line
 		lbu t2, 0(t1)
-		addi a2, t2, 1	# incrementa linha
+		li t3, 14			# ultima linha da tela
+		bne t2, t3, printline.end
+		jal shell.scroll
+printline.end: addi a2, t2, 1	# incrementa linha
 		addi t2, t2, 2	# proxima linha 
 		sb t2, 0(t1)
 		slli a2, a2, 4	# offset da linha
@@ -107,6 +133,8 @@ shell.printLine:
 		li a4, 0
 		li a7, 104
 		ecall
+		lw ra, 0(sp)
+		addi sp, sp, 4
 		ret
 
 # startsWith
